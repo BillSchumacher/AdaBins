@@ -37,21 +37,14 @@ def colorize(value, vmin=10, vmax=1000, cmap='plasma'):
     # normalize
     vmin = value.min() if vmin is None else vmin
     vmax = value.max() if vmax is None else vmax
-    if vmin != vmax:
-        value = (value - vmin) / (vmax - vmin)  # vmin..vmax
-    else:
-        # Avoid 0-division
-        value = value * 0.
+    value = (value - vmin) / (vmax - vmin) if vmin != vmax else value * 0.
     # squeeze last dim if it exists
     # value = value.squeeze(axis=0)
 
     cmapper = matplotlib.cm.get_cmap(cmap)
     value = cmapper(value, bytes=True)  # (nxmx4)
 
-    img = value[:, :, :3]
-
-    #     return img.transpose((2, 0, 1))
-    return img
+    return value[:, :, :3]
 
 
 def log_images(img, depth, pred, args, step):
@@ -124,9 +117,9 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
     if should_log:
         tags = args.tags.split(',') if args.tags != '' else None
         if args.dataset != 'nyu':
-            PROJECT = PROJECT + f"-{args.dataset}"
+            PROJECT = f"{PROJECT}-{args.dataset}"
         wandb.init(project=PROJECT, name=name, config=args, dir=args.root, tags=tags, notes=args.notes)
-        # wandb.watch(model)
+            # wandb.watch(model)
     ################################################################################################
 
     train_loader = DepthDataLoader(args, 'train').data
@@ -180,9 +173,8 @@ def train(model, args, epochs=10, experiment_name="DeepLab", lr=0.0001, root="."
 
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
-            if 'has_valid_depth' in batch:
-                if not batch['has_valid_depth']:
-                    continue
+            if 'has_valid_depth' in batch and not batch['has_valid_depth']:
+                continue
 
             bin_edges, pred = model(img)
 
@@ -243,9 +235,8 @@ def validate(args, model, test_loader, criterion_ueff, epoch, epochs, device='cp
                 args) else test_loader:
             img = batch['image'].to(device)
             depth = batch['depth'].to(device)
-            if 'has_valid_depth' in batch:
-                if not batch['has_valid_depth']:
-                    continue
+            if 'has_valid_depth' in batch and not batch['has_valid_depth']:
+                continue
             depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
             bins, pred = model(img)
 
@@ -363,7 +354,7 @@ if __name__ == '__main__':
     parser.add_argument('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
 
     if sys.argv.__len__() == 2:
-        arg_filename_with_prefix = '@' + sys.argv[1]
+        arg_filename_with_prefix = f'@{sys.argv[1]}'
         args = parser.parse_args([arg_filename_with_prefix])
     else:
         args = parser.parse_args()
@@ -393,7 +384,7 @@ if __name__ == '__main__':
 
         print(args.rank)
         port = np.random.randint(15000, 15025)
-        args.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
+        args.dist_url = f'tcp://{nodes[0]}:{port}'
         print(args.dist_url)
         args.dist_backend = 'nccl'
         args.gpu = None
@@ -403,7 +394,7 @@ if __name__ == '__main__':
     args.ngpus_per_node = ngpus_per_node
 
     if args.distributed:
-        args.world_size = ngpus_per_node * args.world_size
+        args.world_size *= ngpus_per_node
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
         if ngpus_per_node == 1:
