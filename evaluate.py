@@ -96,7 +96,7 @@ def eval(model, test_loader, args, gpus=None, ):
                     factor = 1000
                 else:
                     dpath = batch['image_path'][0].split('/')
-                    impath = dpath[1] + "_" + dpath[-1]
+                    impath = f"{dpath[1]}_{dpath[-1]}"
                     impath = impath.split('.')[0]
                     factor = 256
 
@@ -107,11 +107,10 @@ def eval(model, test_loader, args, gpus=None, ):
                 pred = (final * factor).astype('uint16')
                 Image.fromarray(pred).save(pred_path)
 
-            if 'has_valid_depth' in batch:
-                if not batch['has_valid_depth']:
-                    # print("Invalid ground truth")
-                    total_invalid += 1
-                    continue
+            if 'has_valid_depth' in batch and not batch['has_valid_depth']:
+                # print("Invalid ground truth")
+                total_invalid += 1
+                continue
 
             gt = gt.squeeze().cpu().numpy()
             valid_mask = np.logical_and(gt > args.min_depth, gt < args.max_depth)
@@ -197,7 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--do_kb_crop', help='Use kitti benchmark cropping', action='store_true')
 
     if sys.argv.__len__() == 2:
-        arg_filename_with_prefix = '@' + sys.argv[1]
+        arg_filename_with_prefix = f'@{sys.argv[1]}'
         args = parser.parse_args([arg_filename_with_prefix])
     else:
         args = parser.parse_args()
@@ -205,7 +204,7 @@ if __name__ == '__main__':
     # args = parser.parse_args()
     args.gpu = int(args.gpu) if args.gpu is not None else 0
     args.distributed = False
-    device = torch.device('cuda:{}'.format(args.gpu))
+    device = torch.device(f'cuda:{args.gpu}')
     test = DepthDataLoader(args, 'online_eval').data
     model = UnetAdaptiveBins.build(n_bins=args.n_bins, min_val=args.min_depth, max_val=args.max_depth,
                                    norm='linear').to(device)

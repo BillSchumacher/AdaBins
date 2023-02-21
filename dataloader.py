@@ -42,11 +42,8 @@ class DepthDataLoader(object):
 
         elif mode == 'online_eval':
             self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            if args.distributed:  # redundant. here only for readability and to be more explicit
-                # Give whole test set to all processes (and perform/report evaluation only on one) regardless
-                self.eval_sampler = None
-            else:
-                self.eval_sampler = None
+            # Give whole test set to all processes (and perform/report evaluation only on one) regardless
+            self.eval_sampler = None
             self.data = DataLoader(self.testing_samples, 1,
                                    shuffle=False,
                                    num_workers=1,
@@ -58,13 +55,11 @@ class DepthDataLoader(object):
             self.data = DataLoader(self.testing_samples, 1, shuffle=False, num_workers=1)
 
         else:
-            print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
+            print(f"mode should be one of \'train, test, online_eval\'. Got {mode}")
 
 
 def remove_leading_slash(s):
-    if s[0] == '/' or s[0] == '\\':
-        return s[1:]
-    return s
+    return s[1:] if s[0] in ['/', '\\'] else s
 
 
 class DataLoadPreprocess(Dataset):
@@ -177,8 +172,7 @@ class DataLoadPreprocess(Dataset):
         return sample
 
     def rotate_image(self, image, angle, flag=Image.BILINEAR):
-        result = image.rotate(angle, resample=flag)
-        return result
+        return image.rotate(angle, resample=flag)
 
     def random_crop(self, img, depth, height, width):
         assert img.shape[0] >= height
@@ -254,13 +248,10 @@ class ToTensor(object):
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
-            raise TypeError(
-                'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
+            raise TypeError(f'pic should be PIL Image or ndarray. Got {type(pic)}')
 
         if isinstance(pic, np.ndarray):
-            img = torch.from_numpy(pic.transpose((2, 0, 1)))
-            return img
-
+            return torch.from_numpy(pic.transpose((2, 0, 1)))
         # handle PIL Image
         if pic.mode == 'I':
             img = torch.from_numpy(np.array(pic, np.int32, copy=False))
@@ -269,16 +260,13 @@ class ToTensor(object):
         else:
             img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
         # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
-        if pic.mode == 'YCbCr':
-            nchannel = 3
-        elif pic.mode == 'I;16':
+        if pic.mode == 'I;16':
             nchannel = 1
+        elif pic.mode == 'YCbCr':
+            nchannel = 3
         else:
             nchannel = len(pic.mode)
         img = img.view(pic.size[1], pic.size[0], nchannel)
 
         img = img.transpose(0, 1).transpose(0, 2).contiguous()
-        if isinstance(img, torch.ByteTensor):
-            return img.float()
-        else:
-            return img
+        return img.float() if isinstance(img, torch.ByteTensor) else img
